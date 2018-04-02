@@ -85,14 +85,6 @@ ndarray2f pc2_to_xyz_ndarray(const sensor_msgs::PointCloud2& pc2,
   return xyz;
 }
 
-sensor_msgs::PointCloud2 pcxyz_to_pc2(PCXYZ::Ptr pc,
-                                      const std::string& frame_id) {
-  sensor_msgs::PointCloud2 msg;
-  pcl::toROSMsg(*pc, msg);
-  msg.header.frame_id = frame_id;
-  return msg;
-}
-
 sensor_msgs::PointCloud2 ndarray_to_pc2(const ndarray2f& arr,
                                         const std::string& frame_id) {
 
@@ -221,6 +213,18 @@ sensor_msgs::PointCloud2 pclpc2_to_pc2(const PCLPC2::Ptr pclpc2,
 }
 
 
+template<class PointCloudT>
+sensor_msgs::PointCloud2 pclpc_to_pc2(const typename PointCloudT::Ptr pc,
+                                      const std::string& frame_id) {
+  // there's no move for pointcloudT
+  sensor_msgs::PointCloud2 pc2;
+  pcl::toROSMsg(*pc, pc2);
+  pc2.header.frame_id = frame_id;
+  return pc2;
+}
+
+
+
 void export_converters(py::module& m) {
   m.def("xyz_img_to_pc2",
         &xyz_img_to_pc2,
@@ -239,7 +243,7 @@ void export_converters(py::module& m) {
         py::arg("arr"),
         py::arg("frame_id")="");
   m.def("pcxyz_to_pc2",
-        &pcxyz_to_pc2,
+        &pclpc_to_pc2<PCXYZ>,
         py::arg("pc"),
         py::arg("frame_id")="");
   m.def("pclpc2_to_pc2",
