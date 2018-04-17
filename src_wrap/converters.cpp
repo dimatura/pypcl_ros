@@ -205,11 +205,20 @@ sensor_msgs::PointCloud2 depth_img_to_pc2(py::array_t<float, 2> depth_img,
 sensor_msgs::PointCloud2 pclpc2_to_pc2(const PCLPC2::Ptr pclpc2,
                                        const std::string& frame_id) {
   // sending to python will trigger copy anyway, so move should be safe
+
   sensor_msgs::PointCloud2 pc2;
-  // or could do toROSMsg?
-  pcl_conversions::moveFromPCL(*pclpc2, pc2);
+  // TODO provide move option
+  //pcl_conversions::moveFromPCL(*pclpc2, pc2);
+  pcl_conversions::fromPCL(*pclpc2, pc2);
   pc2.header.frame_id = frame_id;
   return pc2;
+}
+
+PCLPC2::Ptr pc2_to_pclpc2(sensor_msgs::PointCloud2 pc2){
+  // sending to python will trigger copy anyway, so move should be safe
+  PCLPC2::Ptr pclpc2(new PCLPC2);
+  pcl_conversions::moveToPCL(pc2, *pclpc2);
+  return pclpc2;
 }
 
 
@@ -250,6 +259,10 @@ void export_converters(py::module& m) {
         &pclpc2_to_pc2,
         py::arg("pclpc2"),
         py::arg("frame_id")="");
+  m.def("pc2_to_pclpc2",
+        &pc2_to_pclpc2,
+        py::arg("pc2"));
+
 }
 
 }
