@@ -23,8 +23,8 @@ namespace pypcl_ros {
 
 namespace py = pybind11;
 
-
 PCXYZ::Ptr pc2_to_pcxyz(const sensor_msgs::PointCloud2& msg) {
+  // TODO assuming float
   using Pc2CItr = sensor_msgs::PointCloud2ConstIterator<float>;
   Pc2CItr itr_x(msg, "x"), itr_y(msg, "y"), itr_z(msg, "z");
   size_t n_pts = msg.width * msg.height;
