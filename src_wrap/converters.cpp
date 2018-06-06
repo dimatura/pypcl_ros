@@ -43,6 +43,32 @@ PCXYZ::Ptr pc2_to_pcxyz(const sensor_msgs::PointCloud2& msg) {
   return pc;
 }
 
+PCXYZRGB::Ptr pc2_to_pcxyzrgb(const sensor_msgs::PointCloud2& msg) {
+  // TODO assuming float
+  using Pc2CItr = sensor_msgs::PointCloud2ConstIterator<float>;
+  Pc2CItr itr_x(msg, "x"),
+          itr_y(msg, "y"),
+          itr_z(msg, "z"),
+          itr_rgb(msg, "rgb");
+  size_t n_pts = msg.width * msg.height;
+  PCXYZRGB::Ptr pc(new PCXYZRGB());
+  pc->reserve(n_pts);
+  for (size_t i=0; i < n_pts; ++i) {
+    pcl::PointXYZRGB p;
+    p.x = *itr_x;
+    p.y = *itr_y;
+    p.z = *itr_z;
+    p.rgb = *itr_rgb;
+    pc->push_back(p);
+    ++itr_x;
+    ++itr_y;
+    ++itr_z;
+    ++itr_rgb;
+  }
+  return pc;
+}
+
+
 ndarray2f pc2_to_xyz_ndarray(const sensor_msgs::PointCloud2& pc2,
                              bool skip_nan) {
   int valid_pts = 0;
@@ -247,12 +273,19 @@ void export_converters(py::module& m) {
   m.def("pc2_to_pcxyz",
         &pc2_to_pcxyz,
         py::arg("msg"));
+  m.def("pc2_to_pcxyzrgb",
+        &pc2_to_pcxyzrgb,
+        py::arg("msg"));
   m.def("ndarray_to_pc2",
         &ndarray_to_pc2,
         py::arg("arr"),
         py::arg("frame_id")="");
   m.def("pcxyz_to_pc2",
         &pclpc_to_pc2<PCXYZ>,
+        py::arg("pc"),
+        py::arg("frame_id")="");
+  m.def("pcxyzrgb_to_pc2",
+        &pclpc_to_pc2<PCXYZRGB>,
         py::arg("pc"),
         py::arg("frame_id")="");
   m.def("pclpc2_to_pc2",
