@@ -295,7 +295,15 @@ void export_converters(py::module& m) {
   m.def("pc2_to_pclpc2",
         &pc2_to_pclpc2,
         py::arg("pc2"));
-
+  m.def("depth_img_to_pc2",
+        &depth_img_to_pc2,
+        py::arg("depth_img"),
+        py::arg("cx"),
+        py::arg("cy"),
+        py::arg("fx"),
+        py::arg("fy"),
+        py::arg("max_valid_depth"),
+        py::arg("frame_id"));
 }
 
 }

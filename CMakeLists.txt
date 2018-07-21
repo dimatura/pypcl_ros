@@ -1,11 +1,11 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5.1)
 project(pypcl_ros)
 
 set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
 
 find_package(catkin REQUIRED COMPONENTS
   cmake_modules
-  eigen_catkin
+  #eigen_catkin
   image_geometry
   pybind11_catkin
   pybind11
@@ -20,6 +20,7 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(NUMPY REQUIRED)
 find_package(PCL REQUIRED)
 #find_package(pybind11 REQUIRED)
+find_package(Eigen REQUIRED)
 
 catkin_python_setup()
 
@@ -27,7 +28,7 @@ catkin_package(
     #INCLUDE_DIRS include
     LIBRARIES pypcl_ros
     CATKIN_DEPENDS cmake_modules pybind11_catkin roscpp rospy
-    DEPENDS NUMPY PCL
+    DEPENDS NUMPY PCL Eigen
     #CFG_EXTRAS config_extras.cmake
 )
 
@@ -43,6 +44,7 @@ include_directories(
     ${catkin_INCLUDE_DIRS}
     ${PCL_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIRS}
+    ${Eigen_INCLUDE_DIRS}
 )
 
 target_link_libraries(libpypcl_ros
@@ -50,4 +52,5 @@ target_link_libraries(libpypcl_ros
     ${catkin_LIBRARIES}
     ${PCL_LIBRARIES}
     ${OpenCV_LIBRARIES}
+    ${Eigen_INCLUDE_DIRS}
 )
