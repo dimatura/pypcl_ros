@@ -304,6 +304,10 @@ void export_converters(py::module& m) {
         py::arg("fy"),
         py::arg("max_valid_depth"),
         py::arg("frame_id"));
+  m.def("pc2_to_xyz_ndarray",
+        &pc2_to_xyz_ndarray,
+        py::arg("pc2"),
+        py::arg("skip_nan"));
 }
 
 }
