@@ -108,8 +108,8 @@ ndarray2f pc2_to_xyz_ndarray(const sensor_msgs::PointCloud2& pc2,
   return xyz;
 }
 
-sensor_msgs::PointCloud2 ndarray_to_pc2(const ndarray2f& arr,
-                                        const std::string& frame_id) {
+sensor_msgs::PointCloud2 xyz_to_pc2(const ndarray2f& arr,
+                                    const std::string& frame_id) {
   if (arr.shape(1) != 3) {
     throw std::runtime_error("only Nx3 arrays supported for now.");
   }
@@ -141,6 +141,64 @@ sensor_msgs::PointCloud2 ndarray_to_pc2(const ndarray2f& arr,
     ++itr_x;
     ++itr_y;
     ++itr_z;
+  }
+  msg.header.frame_id = frame_id;
+  return msg;
+}
+
+sensor_msgs::PointCloud2 xyz_rgb_to_pc2(const ndarray2f& arr,
+                                        const std::string& frame_id) {
+  if (arr.shape(1) != 6) {
+    throw std::runtime_error("only Nx3 arrays supported for now.");
+  }
+  size_t n_pts = arr.shape(0);
+  sensor_msgs::PointCloud2 msg;
+  msg.height = 1;
+  msg.width = n_pts;
+  sensor_msgs::PointCloud2Modifier modifier(msg);
+  modifier.setPointCloud2FieldsByString(2, "xyz", "rgb");
+  //modifier.setPointCloud2Fields(3,
+  //                              "x",
+  //                              1,
+  //                              sensor_msgs::PointField::FLOAT32,
+  //                              "y",
+  //                              1,
+  //                              sensor_msgs::PointField::FLOAT32,
+  //                              "z",
+  //                              1,
+  //                              sensor_msgs::PointField::FLOAT32,
+  //                              "rgb",
+  //                              1,
+  //                              sensor_msgs::PointField::FLOAT32);
+  modifier.reserve(n_pts);
+  // modifier.resize(n_pts);
+
+  using Pc2Itr = sensor_msgs::PointCloud2Iterator<float>;
+  using Pc2Uint8Itr = sensor_msgs::PointCloud2Iterator<uint8_t>;
+  Pc2Itr itr_x(msg, "x"), itr_y(msg, "y"), itr_z(msg, "z");
+  //Pc2Uint8Itr itr_r(msg, "r"), itr_g(msg, "b"), itr_b(msg, "b");
+  Pc2Uint8Itr itr_rgb(msg, "rgb");
+
+  //itr_rgb(msg, "rgb");
+  auto arr_buf = arr.unchecked();
+  for (size_t i = 0; i < n_pts; ++i) {
+    *itr_x = arr_buf(i, 0);
+    *itr_y = arr_buf(i, 1);
+    *itr_z = arr_buf(i, 2);
+
+    uint8_t r = arr_buf(i, 3);
+    uint8_t g = arr_buf(i, 4);
+    uint8_t b = arr_buf(i, 5);
+
+    itr_rgb[0] = r;
+    itr_rgb[1] = g;
+    itr_rgb[2] = b;
+
+    ++itr_x;
+    ++itr_y;
+    ++itr_z;
+
+    itr_rgb += 1;
   }
   msg.header.frame_id = frame_id;
   return msg;
@@ -269,8 +327,9 @@ void export_converters(py::module& m) {
         py::arg("frame_id") = "");
   m.def("pc2_to_pcxyz", &pc2_to_pcxyz, py::arg("msg"));
   m.def("pc2_to_pcxyzrgb", &pc2_to_pcxyzrgb, py::arg("msg"));
-  m.def("ndarray_to_pc2",
-        &ndarray_to_pc2,
+  m.def("xyz_to_pc2", &xyz_to_pc2, py::arg("arr"), py::arg("frame_id") = "");
+  m.def("xyz_rgb_to_pc2",
+        &xyz_rgb_to_pc2,
         py::arg("arr"),
         py::arg("frame_id") = "");
   m.def("pcxyz_to_pc2",

@@ -26,7 +26,8 @@ catkin_python_setup()
 
 catkin_package(
     #INCLUDE_DIRS include
-    LIBRARIES pypcl_ros
+    # TODO figure this one out
+    #LIBRARIES libpypcl_ros
     CATKIN_DEPENDS cmake_modules pybind11_catkin roscpp rospy
     DEPENDS NUMPY PCL # Eigen3
     #CFG_EXTRAS config_extras.cmake
