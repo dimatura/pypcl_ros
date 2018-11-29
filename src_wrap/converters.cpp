@@ -15,6 +15,7 @@
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
+
 #include <pyrosmsg/converters.hpp>
 
 #include "typedefs.h"
@@ -23,6 +24,10 @@ namespace pypcl_ros {
 
 namespace py = pybind11;
 
+/**
+ * Extracts float xyz to a PC2 message. xyz are not necessarily
+ * contiguous. Will ignore any other pointfields, if present.
+ */
 PCXYZ::Ptr pc2_to_pcxyz(const sensor_msgs::PointCloud2& msg) {
   // TODO assuming float
   using Pc2CItr = sensor_msgs::PointCloud2ConstIterator<float>;
@@ -43,6 +48,10 @@ PCXYZ::Ptr pc2_to_pcxyz(const sensor_msgs::PointCloud2& msg) {
   return pc;
 }
 
+/**
+ * Extracts float xyz and packed float RGB to a PC2 message. xyzrgb are not necessarily
+ * contiguous. Will ignore any other pointfields, if present.
+ */
 PCXYZRGB::Ptr pc2_to_pcxyzrgb(const sensor_msgs::PointCloud2& msg) {
   // TODO assuming float
   using Pc2CItr = sensor_msgs::PointCloud2ConstIterator<float>;
@@ -66,52 +75,60 @@ PCXYZRGB::Ptr pc2_to_pcxyzrgb(const sensor_msgs::PointCloud2& msg) {
   return pc;
 }
 
+/**
+ * Create float Nx3 ndarray from PC2. Optionally skip NaN points.
+ * Assumes xyz fields are contiguous.
+ */
 ndarray2f pc2_to_xyz_ndarray(const sensor_msgs::PointCloud2& pc2,
                              bool skip_nan) {
-  int valid_pts = 0;
+  // TODO optimize this
+  size_t valid_pts = 0;
   if (skip_nan) {
-    sensor_msgs::PointCloud2ConstIterator<float> iter_x(pc2, "x");
-    while (iter_x != iter_x.end()) {
-      float x = iter_x[0];
-      float y = iter_x[1];
-      float z = iter_x[2];
+    sensor_msgs::PointCloud2ConstIterator<float> iter_xyz(pc2, "x");
+    while (iter_xyz != iter_xyz.end()) {
+      float x = iter_xyz[0];
+      float y = iter_xyz[1];
+      float z = iter_xyz[2];
       if (std::isnan(x) || std::isnan(y) || std::isnan(z)) {
         // pass
       } else {
         ++valid_pts;
       }
-      ++iter_x;
+      ++iter_xyz;
     }
   } else {
     // all points are valid
     valid_pts = pc2.width * pc2.height;
   }
 
-  ndarray2f xyz({valid_pts, 3});
+  ndarray2f xyz({valid_pts, (size_t) 3});
   auto xyz_buf = xyz.mutable_unchecked();
-  int out_ix = 0;
-  sensor_msgs::PointCloud2ConstIterator<float> iter_x(pc2, "x");
-  for (int n = 0; n < valid_pts; ++n) {
-    float x = iter_x[0];
-    float y = iter_x[1];
-    float z = iter_x[2];
+  size_t out_ix = 0;
+  sensor_msgs::PointCloud2ConstIterator<float> iter_xyz(pc2, "x");
+  for (size_t n = 0; n < valid_pts; ++n) {
+    float x = iter_xyz[0];
+    float y = iter_xyz[1];
+    float z = iter_xyz[2];
     if (skip_nan && (std::isnan(x) || std::isnan(y) || std::isnan(z))) {
-      ++iter_x;
+      ++iter_xyz;
       continue;
     }
     xyz_buf(out_ix, 0) = x;
     xyz_buf(out_ix, 1) = y;
     xyz_buf(out_ix, 2) = z;
     ++out_ix;
-    ++iter_x;
+    ++iter_xyz;
   }
   return xyz;
 }
 
+/**
+ * Create PC2 from float Nx3 ndarray.
+ */
 sensor_msgs::PointCloud2 xyz_to_pc2(const ndarray2f& arr,
                                     const std::string& frame_id) {
   if (arr.shape(1) != 3) {
-    throw std::runtime_error("only Nx3 arrays supported for now.");
+    throw std::runtime_error("only Nx3 arrays supported");
   }
   size_t n_pts = arr.shape(0);
   sensor_msgs::PointCloud2 msg;
@@ -132,24 +149,28 @@ sensor_msgs::PointCloud2 xyz_to_pc2(const ndarray2f& arr,
   // modifier.resize(n_pts);
 
   using Pc2Itr = sensor_msgs::PointCloud2Iterator<float>;
-  Pc2Itr itr_x(msg, "x"), itr_y(msg, "y"), itr_z(msg, "z");
+  Pc2Itr itr_x(msg, "x");
   auto arr_buf = arr.unchecked();
   for (size_t i = 0; i < n_pts; ++i) {
-    *itr_x = arr_buf(i, 0);
-    *itr_y = arr_buf(i, 1);
-    *itr_z = arr_buf(i, 2);
+    itr_x[0] = arr_buf(i, 0);
+    itr_x[1] = arr_buf(i, 1);
+    itr_x[2] = arr_buf(i, 2);
     ++itr_x;
-    ++itr_y;
-    ++itr_z;
   }
   msg.header.frame_id = frame_id;
   return msg;
 }
 
-sensor_msgs::PointCloud2 xyz_rgb_to_pc2(const ndarray2f& arr,
-                                        const std::string& frame_id) {
+/**
+ * Create PC2 (packed RGB format) from Nx6 float (x,y,z,r,g,b) ndarray.
+ * if scale_to_255:  r, g, b in the ndarray are assumed to be in (0, 1.) and scaled by 255.
+ * if not:  r, g, b in the ndarray are assumed to be in (0, 255).
+ */
+sensor_msgs::PointCloud2 xyzrgb_to_pc2(const ndarray2f& arr,
+                                       bool scale_to_255,
+                                       const std::string& frame_id) {
   if (arr.shape(1) != 6) {
-    throw std::runtime_error("only Nx3 arrays supported for now.");
+    throw std::runtime_error("only Nx6 arrays supported for now.");
   }
   size_t n_pts = arr.shape(0);
   sensor_msgs::PointCloud2 msg;
@@ -157,56 +178,42 @@ sensor_msgs::PointCloud2 xyz_rgb_to_pc2(const ndarray2f& arr,
   msg.width = n_pts;
   sensor_msgs::PointCloud2Modifier modifier(msg);
   modifier.setPointCloud2FieldsByString(2, "xyz", "rgb");
-  //modifier.setPointCloud2Fields(3,
-  //                              "x",
-  //                              1,
-  //                              sensor_msgs::PointField::FLOAT32,
-  //                              "y",
-  //                              1,
-  //                              sensor_msgs::PointField::FLOAT32,
-  //                              "z",
-  //                              1,
-  //                              sensor_msgs::PointField::FLOAT32,
-  //                              "rgb",
-  //                              1,
-  //                              sensor_msgs::PointField::FLOAT32);
   modifier.reserve(n_pts);
-  // modifier.resize(n_pts);
 
   using Pc2Itr = sensor_msgs::PointCloud2Iterator<float>;
   using Pc2Uint8Itr = sensor_msgs::PointCloud2Iterator<uint8_t>;
-  Pc2Itr itr_x(msg, "x"), itr_y(msg, "y"), itr_z(msg, "z");
-  //Pc2Uint8Itr itr_r(msg, "r"), itr_g(msg, "b"), itr_b(msg, "b");
+  Pc2Itr itr_xyz(msg, "xyz");
   Pc2Uint8Itr itr_rgb(msg, "rgb");
 
-  //itr_rgb(msg, "rgb");
+  float scaler = scale_to_255 ? 255.0f : 1.0f;
   auto arr_buf = arr.unchecked();
   for (size_t i = 0; i < n_pts; ++i) {
-    *itr_x = arr_buf(i, 0);
-    *itr_y = arr_buf(i, 1);
-    *itr_z = arr_buf(i, 2);
-
-    uint8_t r = arr_buf(i, 3);
-    uint8_t g = arr_buf(i, 4);
-    uint8_t b = arr_buf(i, 5);
-
+    itr_xyz[0] = arr_buf(i, 0);
+    itr_xyz[1] = arr_buf(i, 1);
+    itr_xyz[2] = arr_buf(i, 2);
+    uint8_t r = std::min(std::max((arr_buf(i, 3) * scaler), 0.f), 255.f);
+    uint8_t g = std::min(std::max((arr_buf(i, 4) * scaler), 0.f), 255.f);
+    uint8_t b = std::min(std::max((arr_buf(i, 5) * scaler), 0.f), 255.f);
     itr_rgb[0] = r;
     itr_rgb[1] = g;
     itr_rgb[2] = b;
 
-    ++itr_x;
-    ++itr_y;
-    ++itr_z;
-
-    itr_rgb += 1;
+    ++itr_xyz;
+    ++itr_rgb;
   }
   msg.header.frame_id = frame_id;
   return msg;
 }
 
-sensor_msgs::PointCloud2 xyz_img_to_pc2(const py::array_t<float, 3>& xyz_img,
+/**
+ * Convert HxWx3 float ndarray to unorganized pc2.
+ */
+sensor_msgs::PointCloud2 xyz_img_to_pc2(const ndarray3f& xyz_img,
                                         bool skip_nan,
                                         const std::string& frame_id) {
+  if (xyz_img.shape(2) != 3) {
+    throw std::runtime_error("xyz_img must have 3 channels");
+  }
   PCXYZ pc;
   auto xyz_img_buf = xyz_img.unchecked();
   for (size_t v = 0; v < xyz_img.shape(0); ++v) {
@@ -233,8 +240,14 @@ sensor_msgs::PointCloud2 xyz_img_to_pc2(const py::array_t<float, 3>& xyz_img,
   return msg;
 }
 
+/**
+ * Convert HxWx3 float ndarray to organized pc2.
+ */
 sensor_msgs::PointCloud2 xyz_img_to_organized_pc2(const ndarray3f& xyz_img,
                                                   const std::string& frame_id) {
+  if (xyz_img.shape(2) != 3) {
+    throw std::runtime_error("xyz_img must have 3 channels");
+  }
   PCXYZ pc;
   auto xyz_img_buf = xyz_img.unchecked();
   for (size_t v = 0; v < xyz_img.shape(0); ++v) {
@@ -255,6 +268,10 @@ sensor_msgs::PointCloud2 xyz_img_to_organized_pc2(const ndarray3f& xyz_img,
   return msg;
 }
 
+/**
+ * Convert HxW float depth img ndarray to organized pc2.
+ * Units are meters.
+ */
 sensor_msgs::PointCloud2 depth_img_to_pc2(py::array_t<float, 2> depth_img,
                                           float cx,
                                           float cy,
@@ -286,6 +303,9 @@ sensor_msgs::PointCloud2 depth_img_to_pc2(py::array_t<float, 2> depth_img,
   return msg;
 }
 
+/**
+ * Convert PCLPointCloud2 to ROS PointCloud2.
+ */
 sensor_msgs::PointCloud2 pclpc2_to_pc2(const PCLPC2::Ptr pclpc2,
                                        const std::string& frame_id) {
   // sending to python will trigger copy anyway, so move should be safe
@@ -298,6 +318,9 @@ sensor_msgs::PointCloud2 pclpc2_to_pc2(const PCLPC2::Ptr pclpc2,
   return pc2;
 }
 
+/**
+ * Convert ROS PointCloud2 to PCL PointCloud2.
+ */
 PCLPC2::Ptr pc2_to_pclpc2(sensor_msgs::PointCloud2 pc2) {
   // sending to python will trigger copy anyway, so move should be safe
   PCLPC2::Ptr pclpc2(new PCLPC2);
@@ -305,6 +328,9 @@ PCLPC2::Ptr pc2_to_pclpc2(sensor_msgs::PointCloud2 pc2) {
   return pclpc2;
 }
 
+/**
+ * Convert PCL PointCloud<T> to ROS PointCloud2.
+ */
 template <class PointCloudT>
 sensor_msgs::PointCloud2 pclpc_to_pc2(const typename PointCloudT::Ptr pc,
                                       const std::string& frame_id) {
@@ -316,6 +342,8 @@ sensor_msgs::PointCloud2 pclpc_to_pc2(const typename PointCloudT::Ptr pc,
 }
 
 void export_converters(py::module& m) {
+  //using namespace pybind11::literals;
+
   m.def("xyz_img_to_pc2",
         &xyz_img_to_pc2,
         py::arg("xyz_img"),
@@ -328,9 +356,10 @@ void export_converters(py::module& m) {
   m.def("pc2_to_pcxyz", &pc2_to_pcxyz, py::arg("msg"));
   m.def("pc2_to_pcxyzrgb", &pc2_to_pcxyzrgb, py::arg("msg"));
   m.def("xyz_to_pc2", &xyz_to_pc2, py::arg("arr"), py::arg("frame_id") = "");
-  m.def("xyz_rgb_to_pc2",
-        &xyz_rgb_to_pc2,
+  m.def("xyzrgb_to_pc2",
+        &xyzrgb_to_pc2,
         py::arg("arr"),
+        py::arg("scale_to_255") = false,
         py::arg("frame_id") = "");
   m.def("pcxyz_to_pc2",
         &pclpc_to_pc2<PCXYZ>,
