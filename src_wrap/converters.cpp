@@ -49,7 +49,8 @@ PCXYZ::Ptr pc2_to_pcxyz(const sensor_msgs::PointCloud2& msg) {
 }
 
 /**
- * Extracts float xyz and packed float RGB to a PC2 message. xyzrgb are not necessarily
+ * Extracts float xyz and packed float RGB to a PC2 message. xyzrgb are not
+ * necessarily
  * contiguous. Will ignore any other pointfields, if present.
  */
 PCXYZRGB::Ptr pc2_to_pcxyzrgb(const sensor_msgs::PointCloud2& msg) {
@@ -84,40 +85,40 @@ ndarray2f pc2_to_xyz_ndarray(const sensor_msgs::PointCloud2& pc2,
   // TODO optimize this
   size_t valid_pts = 0;
   if (skip_nan) {
-    sensor_msgs::PointCloud2ConstIterator<float> iter_xyz(pc2, "x");
-    while (iter_xyz != iter_xyz.end()) {
-      float x = iter_xyz[0];
-      float y = iter_xyz[1];
-      float z = iter_xyz[2];
+    sensor_msgs::PointCloud2ConstIterator<float> itr_xyz(pc2, "x");
+    while (itr_xyz != itr_xyz.end()) {
+      float x = itr_xyz[0];
+      float y = itr_xyz[1];
+      float z = itr_xyz[2];
       if (std::isnan(x) || std::isnan(y) || std::isnan(z)) {
         // pass
       } else {
         ++valid_pts;
       }
-      ++iter_xyz;
+      ++itr_xyz;
     }
   } else {
     // all points are valid
     valid_pts = pc2.width * pc2.height;
   }
 
-  ndarray2f xyz({valid_pts, (size_t) 3});
+  ndarray2f xyz({valid_pts, (size_t)3});
   auto xyz_buf = xyz.mutable_unchecked();
   size_t out_ix = 0;
-  sensor_msgs::PointCloud2ConstIterator<float> iter_xyz(pc2, "x");
+  sensor_msgs::PointCloud2ConstIterator<float> itr_xyz(pc2, "x");
   for (size_t n = 0; n < valid_pts; ++n) {
-    float x = iter_xyz[0];
-    float y = iter_xyz[1];
-    float z = iter_xyz[2];
+    float x = itr_xyz[0];
+    float y = itr_xyz[1];
+    float z = itr_xyz[2];
     if (skip_nan && (std::isnan(x) || std::isnan(y) || std::isnan(z))) {
-      ++iter_xyz;
+      ++itr_xyz;
       continue;
     }
     xyz_buf(out_ix, 0) = x;
     xyz_buf(out_ix, 1) = y;
     xyz_buf(out_ix, 2) = z;
     ++out_ix;
-    ++iter_xyz;
+    ++itr_xyz;
   }
   return xyz;
 }
@@ -132,8 +133,6 @@ sensor_msgs::PointCloud2 xyz_to_pc2(const ndarray2f& arr,
   }
   size_t n_pts = arr.shape(0);
   sensor_msgs::PointCloud2 msg;
-  msg.height = 1;
-  msg.width = n_pts;
   sensor_msgs::PointCloud2Modifier modifier(msg);
   modifier.setPointCloud2Fields(3,
                                 "x",
@@ -145,8 +144,11 @@ sensor_msgs::PointCloud2 xyz_to_pc2(const ndarray2f& arr,
                                 "z",
                                 1,
                                 sensor_msgs::PointField::FLOAT32);
-  modifier.reserve(n_pts);
-  // modifier.resize(n_pts);
+  // modifier.reserve(n_pts);
+  // msg.height = 1;
+  // msg.width = n_pts;
+  // note resize updates height, width
+  modifier.resize(n_pts);
 
   using Pc2Itr = sensor_msgs::PointCloud2Iterator<float>;
   Pc2Itr itr_x(msg, "x");
@@ -163,7 +165,8 @@ sensor_msgs::PointCloud2 xyz_to_pc2(const ndarray2f& arr,
 
 /**
  * Create PC2 (packed RGB format) from Nx6 float (x,y,z,r,g,b) ndarray.
- * if scale_to_255:  r, g, b in the ndarray are assumed to be in (0, 1.) and scaled by 255.
+ * if scale_to_255:  r, g, b in the ndarray are assumed to be in (0, 1.) and
+ * scaled by 255.
  * if not:  r, g, b in the ndarray are assumed to be in (0, 255).
  */
 sensor_msgs::PointCloud2 xyzrgb_to_pc2(const ndarray2f& arr,
@@ -174,15 +177,14 @@ sensor_msgs::PointCloud2 xyzrgb_to_pc2(const ndarray2f& arr,
   }
   size_t n_pts = arr.shape(0);
   sensor_msgs::PointCloud2 msg;
-  msg.height = 1;
-  msg.width = n_pts;
   sensor_msgs::PointCloud2Modifier modifier(msg);
   modifier.setPointCloud2FieldsByString(2, "xyz", "rgb");
-  modifier.reserve(n_pts);
+  // modifier.reserve(n_pts);
+  modifier.resize(n_pts);
 
   using Pc2Itr = sensor_msgs::PointCloud2Iterator<float>;
   using Pc2Uint8Itr = sensor_msgs::PointCloud2Iterator<uint8_t>;
-  Pc2Itr itr_xyz(msg, "xyz");
+  Pc2Itr itr_xyz(msg, "x");
   Pc2Uint8Itr itr_rgb(msg, "rgb");
 
   float scaler = scale_to_255 ? 255.0f : 1.0f;
@@ -342,7 +344,7 @@ sensor_msgs::PointCloud2 pclpc_to_pc2(const typename PointCloudT::Ptr pc,
 }
 
 void export_converters(py::module& m) {
-  //using namespace pybind11::literals;
+  // using namespace pybind11::literals;
 
   m.def("xyz_img_to_pc2",
         &xyz_img_to_pc2,
