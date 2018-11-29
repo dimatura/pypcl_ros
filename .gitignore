@@ -4,3 +4,4 @@
 .*.swp
 core
 .cache
+.cquery_cache
